@@ -1,20 +1,22 @@
 import requests
 import json
+import csv
 
 URL = 'https://www.googleapis.com/youtube/v3/'
 # ここにAPI KEYを入力
 API_KEY = ''
-# ここにVideo IDを入力
-VIDEO_ID = 'CvDjx13oFQI'
 
-def print_video_comment(no, video_id, next_page_token):
+VIDEO_NAMELIST = './video_id.txt'
+
+
+def video_comment(no, video_id, next_page_token):
   params = {
     'key': API_KEY,
     'part': 'snippet',
     'videoId': video_id,
     'order': 'relevance',
     'textFormat': 'plaintext',
-    'maxResults': 1000,
+    'maxResults': 100,
   }
   if next_page_token is not None:
     params['pageToken'] = next_page_token
@@ -34,23 +36,36 @@ def print_video_comment(no, video_id, next_page_token):
     parentId = comment_info['snippet']['topLevelComment']['id']
 
     # 出力
-    print('{:0=4}\t{}\t{}\t{}\t{}'.format(no, text.replace('\r', '\n').replace('\n', ' '), like_cnt, user_name, reply_cnt))
+    parent_comment = ['{},{},{},{},{}'.format(no, text.replace('\r', '').replace('\n', ''), like_cnt, user_name, reply_cnt)]
+
+    with open(f"./all_comment/{video_id}.csv", "a") as f:
+      writer = csv.writer(f, delimiter='\n')
+      writer.writerow(parent_comment)
+      f.close()
 
     if reply_cnt > 0:
       cno = 1
-      print_video_reply(no, cno, video_id, None, parentId)
+      reply_comment = video_reply(no, cno, video_id, None, parentId)
+
+      with open(f"./all_comment/{video_id}.csv", "a") as f:
+        writer = csv.writer(f, delimiter='\n')
+        writer.writerow(reply_comment)
+        f.close()
+
     no = no + 1
 
   if 'nextPageToken' in resource:
-    print_video_comment(no, video_id, resource["nextPageToken"])
+    video_comment(no, video_id, resource["nextPageToken"])
+  
+  return parent_comment
 
-def print_video_reply(no, cno, video_id, next_page_token, id):
+def video_reply(no, cno, video_id, next_page_token, id):
   params = {
     'key': API_KEY,
     'part': 'snippet',
     'videoId': video_id,
     'textFormat': 'plaintext',
-    'maxResults': 1000,
+    'maxResults': 50,
     'parentId': id,
   }
 
@@ -58,6 +73,8 @@ def print_video_reply(no, cno, video_id, next_page_token, id):
     params['pageToken'] = next_page_token
   response = requests.get(URL + 'comments', params=params)
   resource = response.json()
+
+  reply_comment = []
 
   for comment_info in resource['items']:
     # コメント
@@ -67,13 +84,23 @@ def print_video_reply(no, cno, video_id, next_page_token, id):
     # ユーザー名
     user_name = comment_info['snippet']['authorDisplayName']
 
-    print('{:0=4}-{:0=3}\t{}\t{}\t{}'.format(no, cno, text.replace('\r', '\n').replace('\n', ' '), like_cnt, user_name))
+    reply_comment += ['{}-{},{},{},{}'.format(no, cno, text.replace('\r', '').replace('\n', ''), like_cnt, user_name)]
     cno = cno + 1
 
   if 'nextPageToken' in resource:
-    print_video_reply(no, cno, video_id, resource["nextPageToken"], id)
+    video_reply(no, cno, video_id, resource["nextPageToken"], id)
+  
+  return reply_comment
+
 
 # コメントを全取得する
-video_id = VIDEO_ID
-no = 1
-print_video_comment(no, video_id, None)
+
+if __name__ == '__main__':
+  no = 1
+  with open(VIDEO_NAMELIST) as f:
+    for video_id in f:
+      video_id = video_id.rstrip()
+      try:
+        video_comment(no, video_id, None)
+      except:
+        print("error!!")

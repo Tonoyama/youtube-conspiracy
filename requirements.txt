@@ -1,0 +1,5 @@
+requests==2.27.1
+neologdn==0.5.1
+janome
+wordcloud
+matplotlib
